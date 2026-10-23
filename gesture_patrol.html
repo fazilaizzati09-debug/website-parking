@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gesture Patrol — Kendali Ikon micro:bit dengan Gestur Tangan</title>
+<meta name="description" content="Deteksi gestur oke dan peace dengan kamera lewat Teachable Machine, lalu kirim perintah ke micro:bit lewat Bluetooth untuk mengganti ikonnya.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Balsamiq+Sans:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8.4/dist/teachablemachine-image.min.js"></script>
+<style>
+:root{
+  --blue:#5fc2f2; --blue-deep:#3aa5dd; --navy:#17395c; --navy-2:#1e4a75;
+  --red:#e8402a; --red-dark:#c22a18; --yellow:#ffd23f; --yellow-dark:#e0a800;
+  --green:#3fbf6f; --green-dark:#2a9450; --purple:#9b6bd8; --purple-dark:#7a4bb8;
+  --card:#ffffff; --ink:#173a5e; --muted:#5b7a99; --soft:#eaf6fd;
+  --head:'Baloo 2',cursive; --body:'Balsamiq Sans',cursive;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  font-family:var(--body);color:var(--ink);min-height:100vh;line-height:1.55;
+  background-color:var(--blue);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150' viewBox='0 0 150 150'%3E%3Cg fill='%23ffffff' fill-opacity='.13'%3E%3Cellipse cx='52' cy='58' rx='17' ry='13'/%3E%3Cellipse cx='33' cy='39' rx='7.5' ry='10' transform='rotate(-20 33 39)'/%3E%3Cellipse cx='46' cy='30' rx='7.5' ry='10'/%3E%3Cellipse cx='60' cy='30' rx='7.5' ry='10'/%3E%3Cellipse cx='72' cy='39' rx='7.5' ry='10' transform='rotate(20 72 39)'/%3E%3C/g%3E%3Cg fill='%23ffffff' fill-opacity='.09' transform='rotate(24 115 118)'%3E%3Cellipse cx='115' cy='124' rx='15' ry='11'/%3E%3Cellipse cx='99' cy='108' rx='6.5' ry='9' transform='rotate(-20 99 108)'/%3E%3Cellipse cx='110' cy='100' rx='6.5' ry='9'/%3E%3Cellipse cx='122' cy='100' rx='6.5' ry='9'/%3E%3Cellipse cx='132' cy='108' rx='6.5' ry='9' transform='rotate(20 132 108)'/%3E%3C/g%3E%3C/svg%3E");
+}
+.wrap{max-width:1160px;margin:0 auto;padding:0 18px 46px}
+
+/* ===== top strip ===== */
+.topstrip{background:var(--yellow);border-bottom:3px solid var(--yellow-dark)}
+.topstrip .wrap{display:flex;justify-content:center;align-items:center;gap:16px;padding-top:12px;padding-bottom:12px;flex-wrap:wrap}
+.topstrip b{font:800 15px var(--head);color:var(--navy);letter-spacing:.5px}
+
+/* ===== ANIMASI TOMBOL BOUNCY (CUBIC BEZIER) ===== */
+.btn-mini, .btn-nav-connect, .btn, .navlinks a {
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); /* Efek per pir memantul */
+}
+
+.btn-mini{font:800 13px var(--head);color:#fff;background:var(--red);border:none;border-radius:999px;padding:9px 22px;cursor:pointer;box-shadow:0 4px 0 var(--red-dark);letter-spacing:.5px}
+.btn-mini:hover{transform:scale(1.05) translateY(-2px)}
+.btn-mini:active{transform:scale(0.92) translateY(2px);box-shadow:0 1px 0 var(--red-dark)}
+
+/* ===== nav ===== */
+.navwrap{position:sticky;top:10px;z-index:50;padding-top:16px}
+.nav{background:var(--navy);border-radius:26px;box-shadow:0 6px 0 rgba(15,50,85,.35);display:flex;align-items:center;gap:10px;padding:10px 14px;flex-wrap:wrap;max-width:1160px;margin:0 auto}
+.brand{display:flex;align-items:center;gap:11px;text-decoration:none}
+.brand .mark{width:46px;height:46px;background:var(--red);border:3px solid #fff;border-radius:14px;display:grid;place-items:center;font-size:22px;box-shadow:0 3px 0 rgba(0,0,0,.25)}
+.brand span{font:800 21px var(--head);color:#fff;letter-spacing:.5px}
+.navlinks{display:flex;gap:6px;margin:0 auto;flex-wrap:wrap}
+.navlinks a{color:#dbeafb;text-decoration:none;font:700 14px var(--head);padding:9px 17px;border-radius:999px;display:flex;gap:7px;align-items:center}
+.navlinks a:hover{background:rgba(255,255,255,.12);color:#fff;transform:scale(1.08)}
+.navlinks a:active{transform:scale(0.92)}
+.navlinks a.active{background:var(--red);color:#fff;box-shadow:0 3px 0 var(--red-dark)}
+.btn-nav-connect{font:800 14px var(--head);color:var(--navy);background:var(--yellow);border:none;border-radius:999px;padding:10px 22px;cursor:pointer;box-shadow:0 4px 0 var(--yellow-dark)}
+.btn-nav-connect:hover:not(:disabled){transform:scale(1.05) translateY(-2px);filter:brightness(1.05)}
+.btn-nav-connect:active:not(:disabled){transform:scale(0.92) translateY(2px);box-shadow:0 1px 0 var(--yellow-dark)}
+.btn-nav-connect:disabled{filter:grayscale(.7);opacity:.55;cursor:not-allowed}
+
+/* ===== hero ===== */
+.hero{position:relative;text-align:center;padding:64px 10px 10px}
+.hero-badge{display:inline-block;background:var(--red);color:#fff;border:3px solid #fff;border-radius:16px;padding:10px 30px;font:800 22px var(--head);letter-spacing:2px;transform:rotate(-3deg);box-shadow:0 6px 0 rgba(15,50,85,.25);animation:badge-bob 3.4s ease-in-out infinite}
+@keyframes badge-bob{0%,100%{transform:rotate(-3deg) translateY(0)}50%{transform:rotate(-2deg) translateY(-5px)}}
+.hero h1{font:800 clamp(42px,6.4vw,68px)/1.14 var(--head);color:#fff;text-shadow:0 5px 0 rgba(23,57,92,.28);margin:26px auto 18px;max-width:900px;animation:pop 3.2s ease-in-out infinite}
+.hero h1 .hl{color:var(--yellow)}
+@keyframes pop{0%,100%{transform:scale(1)}50%{transform:scale(1.02)}}
+.hero-desc{max-width:660px;margin:0 auto;color:#fff;font-weight:700;font-size:17px;text-shadow:0 1px 0 rgba(23,57,92,.25)}
+.hero-actions{display:flex;justify-content:center;align-items:center;gap:14px;margin-top:30px;flex-wrap:wrap}
+.hero-sub{display:flex;justify-content:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+
+/* buttons bouncy main */
+.btn{font:800 15px var(--head);border:none;border-radius:999px;padding:14px 26px;cursor:pointer;color:#fff;box-shadow:0 5px 0 rgba(0,0,0,.25);display:inline-flex;gap:9px;align-items:center;justify-content:center}
+.btn:hover:not(:disabled){transform:scale(1.05) translateY(-2px);filter:brightness(1.07)}
+.btn:active:not(:disabled){transform:scale(0.92) translateY(3px);box-shadow:0 2px 0 rgba(0,0,0,.25)}
+.btn:disabled{filter:grayscale(.85);opacity:.6;cursor:not-allowed}
+.btn-red{background:var(--red);box-shadow:0 5px 0 var(--red-dark)}
+.btn-navy{background:var(--navy-2);box-shadow:0 5px 0 var(--navy)}
+.btn-ghost{background:#fff;color:var(--navy);box-shadow:0 4px 0 #c6dff0;font-size:13px;padding:10px 20px}
+.pill-status{background:#fff;border-radius:999px;padding:12px 22px;font:800 14px var(--head);color:var(--navy);box-shadow:0 4px 0 #c6dff0;display:inline-flex;gap:9px;align-items:center}
+.pill-status i{width:11px;height:11px;border-radius:50%;background:var(--yellow);transition:background .2s}
+.pill-status.on{color:var(--green-dark)}
+.pill-status.on i{background:var(--green);animation:blink 1.2s infinite}
+@keyframes blink{50%{opacity:.4}}
+
+/* ===== floating gesture stickers ===== */
+.sticker{position:absolute;z-index:2;background:#fff;border-radius:18px;box-shadow:0 6px 0 rgba(15,50,85,.18);padding:13px 18px;display:flex;gap:12px;align-items:center;animation:floaty 3s ease-in-out infinite;pointer-events:none}
+.sticker .ic{width:52px;height:52px;border-radius:14px;display:grid;place-items:center;font-size:26px;flex:none}
+.sticker b{display:block;font:800 15px var(--head);color:var(--navy)}
+.sticker span{display:block;font:700 12px var(--body);color:var(--muted)}
+.st-oke{left:0;top:53%;transform:rotate(-7deg)}
+.st-oke .ic{background:#fff3cd}
+.st-oke b{color:#8a6d00}
+.st-peace{right:0;top:57%;transform:rotate(7deg);animation-delay:1.4s}
+.st-peace .ic{background:var(--red)}
+.st-peace b{color:var(--red-dark)}
+@keyframes floaty{0%,100%{translate:0 0}50%{translate:0 -10px}}
+
+/* ===== patrol characters (Aima, Kaye, Ziel) ===== */
+.patrol-row{display:flex;justify-content:center;align-items:flex-end;gap:90px;margin:44px 0 6px;flex-wrap:wrap}
+.character{display:flex;flex-direction:column;align-items:center;gap:4px;animation:hop 2.6s ease-in-out infinite}
+.character:nth-child(2){animation-delay:.4s}
+.character:nth-child(3){animation-delay:.8s}
+@keyframes hop{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
+.character svg{width:104px;filter:drop-shadow(0 5px 0 rgba(15,50,85,.18))}
+.name-tag{background:#fff;border-radius:999px;padding:3px 14px;font:800 11px var(--head);color:var(--navy);box-shadow:0 2px 0 rgba(15,50,85,.2);letter-spacing:1px}
+.name-tag.aima{color:var(--purple-dark)}
+.name-tag.kaye{color:var(--red-dark)}
+.name-tag.ziel{color:var(--navy-2)}
+
+/* ===== section heads ===== */
+.section-head{display:flex;align-items:center;gap:12px;margin:34px 0 16px;flex-wrap:wrap}
+.section-head h2{font:800 26px var(--head);color:#fff;text-shadow:0 3px 0 rgba(23,57,92,.28);display:flex;align-items:center;gap:10px}
+.section-head .em{background:#fff;border-radius:12px;padding:4px 10px;box-shadow:0 3px 0 rgba(15,50,85,.18)}
+.section-head p{color:#fff;font-weight:700;font-size:13px;text-shadow:0 1px 0 rgba(23,57,92,.25)}
+
+/* ===== dashboard panel ===== */
+.panel{background:var(--card);border:5px solid var(--yellow);border-radius:28px;box-shadow:0 9px 0 rgba(15,50,85,.15);padding:22px}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.panel-head h3{font:800 22px var(--head);color:var(--navy)}
+.tabs{display:flex;gap:8px;flex-wrap:wrap}
+.tab{border:2px solid #e3eef7;background:#f4f9fd;color:var(--muted);border-radius:999px;padding:7px 18px;font:800 12px var(--head);letter-spacing:.5px;transition:all .2s}
+.tab.live-on{background:var(--red);border-color:var(--red);color:#fff;box-shadow:0 3px 0 var(--red-dark)}
+.tab.oke-on{background:var(--green);border-color:var(--green);color:#fff;box-shadow:0 3px 0 var(--green-dark)}
+.tab.peace-on{background:var(--purple);border-color:var(--purple);color:#fff;box-shadow:0 3px 0 var(--purple-dark)}
+.dash-grid{display:grid;grid-template-columns:1.15fr 1fr;gap:20px}
+
+/* ===== KAMERA FIX ========================================= */
+.cam-box{
+  background:var(--soft);
+  border: 4px solid var(--blue-deep);
+  border-radius:24px; /* Outline yang bulat dan tegas */
+  overflow:hidden;
+  aspect-ratio:4/3;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  position:relative;
+  box-shadow: inset 0 0 10px rgba(0,0,0,0.1);
+}
+.cam-box video{
+  position: absolute;
+  top: 0; left: 0;
+  width:100%!important;
+  height:100%!important;
+  object-fit:cover; /* Memastikan rasio terjaga, memenuhi border */
+  border-radius:inherit; /* Menyalin border-radius dari kontainer */
+  transform:scaleX(-1);
+  display:block;
+}
+.cam-off{
+  color:var(--navy);
+  font:800 14px var(--body);
+  opacity:.85;
+  text-align:center;
+  padding:16px;
+  line-height:1.6;
+  z-index: 2; /* Agar berada di atas jika ada background */
+}
+/* ========================================================= */
+
+.pred-line{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--soft);border-radius:14px;padding:10px 15px;margin-top:12px}
+.pred-line b{font:800 17px var(--head)}
+.pred-line small{color:var(--muted);font-weight:700}
+.bars{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.bar-row{display:flex;align-items:center;gap:9px;font:800 12px var(--body);color:var(--muted)}
+.bar-track{flex:1;height:14px;border-radius:99px;background:#e3eef7;overflow:hidden}
+.bar-fill{height:100%;border-radius:99px;width:0%;transition:width .2s}
+.bar-fill.oke{background:var(--green)}
+.bar-fill.peace{background:var(--purple)}
+.status-list{display:flex;flex-direction:column}
+.status-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 2px;border-bottom:2px dotted #dcebf7}
+.status-item:last-child{border-bottom:0}
+.status-label{font-size:13px;color:var(--muted);font-weight:700}
+.status-value{font-weight:700;font-size:13.5px;color:var(--navy)}
+.status-value.ok{color:var(--green-dark)}
+.status-value.bad{color:var(--red-dark)}
+.status-value.purple{color:var(--purple-dark)}
+.icon-preview{display:grid;place-items:center;border-radius:16px;background:var(--soft);min-height:88px;font-size:42px;border:3px dashed #cfe5f4;color:#9db8cf;margin-top:12px}
+.icon-preview.oke{background:#e6f9ee;border-color:#9fe0bb;color:var(--green)}
+.icon-preview.peace{background:#f4edfd;border-color:#d3bdf2;color:var(--purple)}
+
+/* ===== log ===== */
+.log-box{font:700 12px/1.9 var(--body);color:#bfe3ff;height:130px;overflow-y:auto;background:var(--navy);border-radius:16px;padding:12px 15px}
+.log-box b{color:var(--yellow)}
+
+/* ===== steps ===== */
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.step{background:#fff;border-radius:20px;padding:18px;box-shadow:0 6px 0 rgba(15,50,85,.15);display:flex;gap:13px;align-items:flex-start;transition:transform .18s}
+.step:hover{transform:translateY(-4px) rotate(-.5deg)}
+.step .n{width:38px;height:38px;flex:none;border-radius:50%;display:grid;place-items:center;font:800 17px var(--head);color:#fff;box-shadow:0 3px 0 rgba(0,0,0,.18)}
+.step:nth-child(1) .n{background:var(--red)}
+.step:nth-child(2) .n{background:var(--yellow);color:#7a5200}
+.step:nth-child(3) .n{background:var(--purple)}
+.step h3{font:800 15px var(--head);color:var(--navy)}
+.step p{font-size:12.5px;color:var(--muted);font-weight:700}
+
+/* ===== code card ===== */
+.code-card{background:#fff;border:5px solid var(--navy-2);border-radius:28px;box-shadow:0 9px 0 rgba(15,50,85,.15);padding:22px}
+.code-card h3{font:800 22px var(--head);color:var(--navy)}
+.code-card .note{font-size:13px;color:var(--muted);font-weight:700;margin-bottom:12px}
+.code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;background:var(--navy);color:#cfe8ff;border-radius:14px;padding:14px 16px;white-space:pre;overflow-x:auto;line-height:1.7}
+.code .k{color:var(--yellow)}
+.code .s{color:#8fe3a8}
+
+footer{margin-top:34px;text-align:center;color:#fff;font-weight:700;font-size:13px;text-shadow:0 1px 0 rgba(23,57,92,.25)}
+footer .heart{color:var(--red)}
+
+@media (max-width:920px){
+  .sticker{display:none}
+  .dash-grid{grid-template-columns:1fr}
+  .steps{grid-template-columns:1fr}
+  .navlinks{order:3;width:100%;justify-content:center}
+  .patrol-row{gap:34px}
+}
+</style>
+</head>
+<body>
+
+<div class="topstrip">
+  <div class="wrap">
+    <b>🐾 SIAP BERTUGAS? KENDALIKAN MICRO:BIT DENGAN GESTUR!</b>
+    <button class="btn-mini" onclick="document.getElementById('dashboard').scrollIntoView({behavior:'smooth'})">MULAI MISI!</button>
+  </div>
+</div>
+
+<div class="navwrap">
+  <nav class="nav">
+    <a class="brand" href="#beranda"><span class="mark">🐾</span><span>Gesture Patrol</span></a>
+    <div class="navlinks">
+      <a href="#beranda" class="active">🏠 Beranda</a>
+      <a href="#dashboard">📊 Dashboard</a>
+      <a href="#cara">🧭 Cara Pakai</a>
+      <a href="#kode">💻 Kode micro:bit</a>
+    </div>
+    <button id="btn-connect-nav" class="btn-nav-connect">Hubungkan</button>
+  </nav>
+</div>
+
+<main class="wrap">
+
+  <section class="hero" id="beranda">
+    <div class="sticker st-oke"><span class="ic">👌</span><span><b>Gestur Oke</b><span>Ikon centang di micro:bit</span></span></div>
+    <div class="sticker st-peace"><span class="ic">✌️</span><span><b>Gestur Peace</b><span>Ikon damai di micro:bit</span></span></div>
+
+    <div class="hero-badge">GESTUR PATROL</div>
+    <h1>Kendali Ikon micro:bit<br>dengan <span class="hl">Gestur Tangan</span></h1>
+    <p class="hero-desc">Tunjukkan gestur Oke atau Peace ke kamera. Website membedakan gestur lewat model Teachable Machine, lalu mengirim perintah ke micro:bit lewat Bluetooth untuk mengganti ikonnya. Tidak ada misi yang terlalu besar, tidak ada gestur yang terlalu kecil!</p>
+
+    <div class="hero-actions">
+      <button id="btn-connect" class="btn btn-red">🐾 Hubungkan micro:bit</button>
+      <button id="btn-start" class="btn btn-navy">📷 Mulai Kamera</button>
+      <span id="bt-pill" class="pill-status"><i></i><span id="bt-pill-text">Belum terhubung</span></span>
+    </div>
+    <div class="hero-sub">
+      <button id="btn-stop" class="btn btn-ghost">⏹ Berhenti</button>
+      <button id="btn-disconnect" class="btn btn-ghost">✂ Putuskan</button>
+    </div>
+
+    <!-- Karakter Aima, Kaye, Ziel -->
+    <div class="patrol-row">
+      <div class="character">
+        <svg viewBox="0 0 160 210" aria-hidden="true">
+          <path d="M116 164 q18 -8 14 -24" fill="none" stroke="#2b2b2b" stroke-width="4" stroke-linecap="round"/>
+          <circle cx="132" cy="140" r="6" fill="#c98a5b"/>
+          <ellipse cx="80" cy="164" rx="38" ry="31" fill="#ef8fb6" stroke="#2b2b2b" stroke-width="4"/>
+          <rect x="62" y="166" width="36" height="12" rx="6" fill="#e2739f" stroke="#2b2b2b" stroke-width="3"/>
+          <ellipse cx="42" cy="192" rx="11" ry="8" fill="#f7dfc4" stroke="#2b2b2b" stroke-width="4"/>
+          <ellipse cx="118" cy="192" rx="11" ry="8" fill="#f7dfc4" stroke="#2b2b2b" stroke-width="4"/>
+          <path d="M44 78 q-16 30 -2 52 q10 4 14 -8 q-6 -24 4 -40 z" fill="#c98a5b" stroke="#2b2b2b" stroke-width="4"/>
+          <path d="M116 78 q16 30 2 52 q-10 4 -14 -8 q6 -24 -4 -40 z" fill="#c98a5b" stroke="#2b2b2b" stroke-width="4"/>
+          <circle cx="80" cy="94" r="40" fill="#f7dfc4" stroke="#2b2b2b" stroke-width="4"/>
+          <ellipse cx="80" cy="112" rx="17" ry="11" fill="#fff3e6"/>
+          <ellipse cx="80" cy="104" rx="6" ry="4.5" fill="#2b2b2b"/>
+          <path d="M44 80 a36 32 0 0 1 72 0 z" fill="#f285b5" stroke="#2b2b2b" stroke-width="4"/>
+          <rect x="40" y="74" width="80" height="10" rx="5" fill="#e06a9f" stroke="#2b2b2b" stroke-width="4"/>
+          <circle cx="62" cy="58" r="10" fill="#ffd23f" stroke="#2b2b2b" stroke-width="4"/>
+          <circle cx="98" cy="58" r="10" fill="#ffd23f" stroke="#2b2b2b" stroke-width="4"/>
+          <rect x="68" y="54" width="24" height="8" fill="#c98a5b"/>
+        </svg>
+        <span class="name-tag aima">AIMA</span>
+      </div>
+
+      <div class="character">
+        <svg viewBox="0 0 160 210" aria-hidden="true">
+          <path d="M118 166 q18 -6 16 -22" fill="none" stroke="#2b2b2b" stroke-width="4" stroke-linecap="round"/>
+          <circle cx="136" cy="144" r="6" fill="#2b2b2b"/>
+          <ellipse cx="80" cy="166" rx="40" ry="32" fill="#ffffff" stroke="#2b2b2b" stroke-width="4"/>
+          <path d="M46 150 q34 -16 68 0 l-5 26 q-29 10 -58 0 z" fill="#e8402a" stroke="#2b2b2b" stroke-width="4"/>
+          <circle cx="58" cy="176" r="5" fill="#2b2b2b"/>
+          <circle cx="102" cy="182" r="4" fill="#2b2b2b"/>
+          <ellipse cx="42" cy="194" rx="11" ry="8" fill="#ffffff" stroke="#2b2b2b" stroke-width="4"/>
+          <ellipse cx="118" cy="194" rx="11" ry="8" fill="#ffffff" stroke="#2b2b2b" stroke-width="4"/>
+          <ellipse cx="40" cy="86" rx="12" ry="24" fill="#ffffff" stroke="#2b2b2b" stroke-width="4" transform="rotate(-14 40 86)"/>
+          <ellipse cx="120" cy="86" rx="12" ry="24" fill="#ffffff" stroke="#2b2b2b" stroke-width="4" transform="rotate(14 120 86)"/>
+          <circle cx="34" cy="102" r="6" fill="#2b2b2b"/>
+          <circle cx="126" cy="102" r="6" fill="#2b2b2b"/>
+          <circle cx="80" cy="96" r="42" fill="#ffffff" stroke="#2b2b2b" stroke-width="4"/>
+          <ellipse cx="80" cy="114" rx="18" ry="12" fill="#f6f2ec"/>
+          <ellipse cx="80" cy="106" rx="7" ry="5" fill="#2b2b2b"/>
+          <path d="M42 84 a38 34 0 0 1 76 0 z" fill="#e8402a" stroke="#2b2b2b" stroke-width="4"/>
+          <rect x="36" y="78" width="88" height="11" rx="5.5" fill="#c22a18" stroke="#2b2b2b" stroke-width="4"/>
+          <rect x="72" y="60" width="16" height="13" rx="4" fill="#ffd23f" stroke="#2b2b2b" stroke-width="3"/>
+        </svg>
+        <span class="name-tag kaye">KAYE</span>
+      </div>
+
+      <div class="character">
+        <svg viewBox="0 0 160 210" aria-hidden="true">
+          <path d="M118 166 q18 -6 16 -22" fill="none" stroke="#2b2b2b" stroke-width="4" stroke-linecap="round"/>
+          <circle cx="136" cy="144" r="6" fill="#8a5a33"/>
+          <ellipse cx="80" cy="166" rx="40" ry="32" fill="#3b5ba5" stroke="#2b2b2b" stroke-width="4"/>
+          <rect x="60" y="150" width="40" height="14" rx="7" fill="#274b8f" stroke="#2b2b2b" stroke-width="3"/>
+          <circle cx="80" cy="157" r="5" fill="#ffd23f" stroke="#2b2b2b" stroke-width="2"/>
+          <ellipse cx="42" cy="194" rx="11" ry="8" fill="#e3b583" stroke="#2b2b2b" stroke-width="4"/>
+          <ellipse cx="118" cy="194" rx="11" ry="8" fill="#e3b583" stroke="#2b2b2b" stroke-width="4"/>
+          <ellipse cx="40" cy="86" rx="12" ry="24" fill="#b9854e" stroke="#2b2b2b" stroke-width="4" transform="rotate(-14 40 86)"/>
+          <ellipse cx="120" cy="86" rx="12" ry="24" fill="#b9854e" stroke="#2b2b2b" stroke-width="4" transform="rotate(14 120 86)"/>
+          <circle cx="80" cy="96" r="42" fill="#e3b583" stroke="#2b2b2b" stroke-width="4"/>
+          <ellipse cx="80" cy="114" rx="18" ry="12" fill="#f2d9b8"/>
+          <ellipse cx="80" cy="106" rx="7" ry="5" fill="#2b2b2b"/>
+          <path d="M42 84 a38 34 0 0 1 76 0 z" fill="#274b8f" stroke="#2b2b2b" stroke-width="4"/>
+          <rect x="36" y="78" width="88" height="11" rx="5.5" fill="#1e3a6e" stroke="#2b2b2b" stroke-width="4"/>
+          <circle cx="80" cy="70" r="8" fill="#ffd23f" stroke="#2b2b2b" stroke-width="3"/>
+          <path d="M30 88 h18 v8 h-18 z" fill="#274b8f" stroke="#2b2b2b" stroke-width="3"/>
+          <path d="M112 88 h18 v8 h-18 z" fill="#274b8f" stroke="#2b2b2b" stroke-width="3"/>
+        </svg>
+        <span class="name-tag ziel">ZIEL</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="dashboard">
+    <div class="section-head">
+      <h2><span class="em">📊</span> Panel Misi Gestur</h2>
+      <p>Lacak misi: kamera, Bluetooth, dan ikon yang dikirim</p>
+    </div>
+    <div class="panel">
+      <div class="panel-head">
+        <h3>Misi Berlangsung 🐾</h3>
+        <div class="tabs">
+          <span id="t-live" class="tab">LIVE</span>
+          <span id="t-oke" class="tab">OKE</span>
+          <span id="t-peace" class="tab">PEACE</span>
+        </div>
+      </div>
+      <div class="dash-grid">
+        <div>
+          <!-- KAMERA BOX -->
+          <div id="webcam-container" class="cam-box">
+             <div class="cam-off" id="cam-placeholder">📷 Kamera belum menyala.<br>Tekan tombol <b>Mulai Kamera</b> di atas!</div>
+          </div>
+          <div class="pred-line"><b id="prediction-label">Belum ada gestur</b><small id="prediction-confidence"></small></div>
+          <div class="bars">
+            <div class="bar-row"><span style="width:56px">👌 OKE</span><div class="bar-track"><div id="bar-oke" class="bar-fill oke"></div></div><span id="pct-oke" style="width:44px;text-align:right">0%</span></div>
+            <div class="bar-row"><span style="width:56px">✌️ PEACE</span><div class="bar-track"><div id="bar-peace" class="bar-fill peace"></div></div><span id="pct-peace" style="width:44px;text-align:right">0%</span></div>
+          </div>
+        </div>
+        <div>
+          <div class="status-list">
+            <div class="status-item"><span class="status-label">Bluetooth micro:bit</span><span id="bt-status" class="status-value bad">Belum Terhubung</span></div>
+            <div class="status-item"><span class="status-label">Kamera</span><span id="cam-status" class="status-value bad">Mati</span></div>
+            <div class="status-item"><span class="status-label">Ikon yang dikirim</span><span id="gate-status" class="status-value">Siaga</span></div>
+            <div class="status-item"><span class="status-label">Perintah terakhir</span><span id="last-command" class="status-value">-</span></div>
+            <div class="status-item"><span class="status-label">Gestur terdeteksi</span><span id="gesture-status" class="status-value">-</span></div>
+          </div>
+          <div id="icon-preview" class="icon-preview">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:20px;border-color:var(--navy-2)">
+      <div class="panel-head"><h3>Catatan Aktivitas 📜</h3></div>
+      <div id="log" class="log-box"></div>
+    </div>
+  </section>
+
+  <section id="cara">
+    <div class="section-head">
+      <h2><span class="em">🧭</span> Cara Pakai</h2>
+      <p>Tiga langkah mudah, siap bertugas!</p>
+    </div>
+    <div class="steps">
+      <div class="step"><div class="n">1</div><div><h3>Hubungkan micro:bit (Opsional)</h3><p>Tekan tombol HUBUNGKAN lalu pilih BBC micro:bit di Chrome/Edge komputer. Tanpa micro:bit, kamera tetap bisa dipakai.</p></div></div>
+      <div class="step"><div class="n">2</div><div><h3>Nyalakan kamera</h3><p>Tekan MULAI KAMERA, beri izin webcam, lalu tunjukkan gestur oke atau peace.</p></div></div>
+      <div class="step"><div class="n">3</div><div><h3>Ikon berubah!</h3><p>Tunggu gestur stabil 1 detik, perintah terkirim ke micro:bit via Bluetooth UART.</p></div></div>
+    </div>
+  </section>
+
+  <section id="kode">
+    <div class="section-head">
+      <h2><span class="em">💻</span> Kode micro:bit</h2>
+      <p>Contoh program MakeCode di sisi micro:bit</p>
+    </div>
+    <div class="code-card">
+      <h3>Program Penerima Perintah 🐾</h3>
+      <p class="note">Di MakeCode, gunakan blok serial on data received. Website mengirim teks <b>oke</b> atau <b>peace</b> via Bluetooth UART.</p>
+      <div class="code"><span class="k">serial</span>.onDataReceived(<span class="s">"\n"</span>, <span class="k">function</span> () {
+  <span class="k">let</span> data = <span class="k">serial</span>.readLine()
+  <span class="k">if</span> (data == <span class="s">"oke"</span>) {
+      <span class="k">basic</span>.showIcon(<span class="k">IconNames</span>.Yes)      <i>// ikon ✓</i>
+  } <span class="k">else if</span> (data == <span class="s">"peace"</span>) {
+      <span class="k">basic</span>.showLeds(<span class="s">`
+. # . # .
+. # . # .
+. . # . .
+# . . . #
+. . . . .`</span>)   <i>// ikon ✌</i>
+  }
+})</div>
+    </div>
+  </section>
+
+  <footer>Dibuat dengan <span class="heart">❤</span> oleh Gesture Patrol • Aima, Kaye &amp; Ziel siap bertugas!</footer>
+</main>
+
+<script>
+(function () {
+  // ==================== PENGATURAN ====================
+  const MODEL_URL = "https://teachablemachine.withgoogle.com/models/zELGn6HMwY/";
+
+  const CONFIDENCE_THRESHOLD = 0.90;
+  const STABLE_MS   = 700;
+  const CLEAR_MS    = 1500;
+  const COOLDOWN_MS = 3000;
+  const PRESENCE_THRESHOLD = 0.60;
+
+  const LABEL_OKE = "oke";
+  const LABEL_PEACE = "peace";
+  const ALLOWED_LABELS = [LABEL_OKE, LABEL_PEACE];
+
+  const UART_SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+  const UART_RX      = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
+
+  // ==================== STATE ====================
+  let model = null;
+  let mediaStream = null;
+  let videoEl = null;
+  let maxPredictions = 0;
+  let isPredicting = false;
+
+  let bluetoothDevice = null;
+  let writeCharacteristic = null;
+  let isBluetoothConnected = false;
+
+  let candidateLabel = null;
+  let candidateSince = 0;
+  let locked = false;
+  let lastSendTime = 0;
+  let lastPresenceTime = 0;
+  let isSending = false;
+
+  function resetDetection() {
+    candidateLabel = null;
+    candidateSince = 0;
+    locked = false;
+    lastSendTime = 0;
+    lastPresenceTime = 0;
+    isSending = false;
+  }
+
+  // ==================== TAMPILAN ====================
+  function log(msg) {
+    const el = document.getElementById("log");
+    const time = new Date().toLocaleTimeString("id-ID");
+    const line = document.createElement("div");
+    line.innerHTML = "<b>[" + time + "]</b> " + msg;
+    el.appendChild(line);
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function setBtStatus(connected) {
+    const el = document.getElementById("bt-status");
+    el.textContent = connected ? "Terhubung 🎉" : "Belum Terhubung";
+    el.className = "status-value " + (connected ? "ok" : "bad");
+
+    document.getElementById("btn-connect").disabled = connected;
+    document.getElementById("btn-connect-nav").disabled = connected;
+
+    const pill = document.getElementById("bt-pill");
+    document.getElementById("bt-pill-text").textContent = connected ? "Terhubung" : "Belum terhubung";
+    pill.className = "pill-status" + (connected ? " on" : "");
+  }
+
+  function setCamStatus(on) {
+    const el = document.getElementById("cam-status");
+    el.textContent = on ? "Aktif 📷" : "Mati";
+    el.className = "status-value " + (on ? "ok" : "bad");
+    document.getElementById("t-live").className = "tab" + (on ? " live-on" : "");
+  }
+
+  function setGestureStatus(label) {
+    const el = document.getElementById("gesture-status");
+    el.textContent = label ? label.toUpperCase() : "-";
+    el.className = "status-value";
+    if (label === LABEL_OKE) el.classList.add("ok");
+    else if (label === LABEL_PEACE) el.classList.add("purple");
+  }
+
+  function setGateStatus(text) {
+    document.getElementById("gate-status").textContent = text;
+  }
+
+  function setLastCommand(label) {
+    document.getElementById("last-command").textContent = label ? label.toUpperCase() : "-";
+  }
+
+  function setIconPreview(label) {
+    const el = document.getElementById("icon-preview");
+    el.className = "icon-preview";
+    if (label === LABEL_OKE) { el.classList.add("oke"); el.textContent = "✔️"; }
+    else if (label === LABEL_PEACE) { el.classList.add("peace"); el.textContent = "✌️"; }
+    else { el.textContent = "—"; }
+  }
+
+  function updateTabs(label, strong) {
+    const tOke = document.getElementById("t-oke");
+    const tPeace = document.getElementById("t-peace");
+    tOke.className = "tab" + (strong && label === LABEL_OKE ? " oke-on" : "");
+    tPeace.className = "tab" + (strong && label === LABEL_PEACE ? " peace-on" : "");
+  }
+
+  function updateBars(prediction) {
+    let pOke = 0, pPeace = 0;
+    if(prediction && prediction.length > 0) {
+      for (const p of prediction) {
+        const name = (p.className || "").toLowerCase();
+        if (name === LABEL_OKE) pOke = p.probability;
+        else if (name === LABEL_PEACE) pPeace = p.probability;
+      }
+    }
+    document.getElementById("bar-oke").style.width = (pOke * 100).toFixed(1) + "%";
+    document.getElementById("bar-peace").style.width = (pPeace * 100).toFixed(1) + "%";
+    document.getElementById("pct-oke").textContent = (pOke * 100).toFixed(0) + "%";
+    document.getElementById("pct-peace").textContent = (pPeace * 100).toFixed(0) + "%";
+  }
+
+  // ==================== BLUETOOTH ====================
+  async function connectBluetooth() {
+    try {
+      if (!navigator.bluetooth) {
+        throw new Error("Browser tidak mendukung Web Bluetooth. Gunakan Chrome / Edge di komputer.");
+      }
+
+      log("Mencari micro:bit...");
+      bluetoothDevice = await navigator.bluetooth.requestDevice({
+        filters: [{ namePrefix: "BBC micro:bit" }],
+        optionalServices: [UART_SERVICE]
+      });
+
+      bluetoothDevice.addEventListener("gattserverdisconnected", onDisconnected);
+
+      log("Menghubungkan ke " + bluetoothDevice.name + "...");
+      const server = await bluetoothDevice.gatt.connect();
+      const service = await server.getPrimaryService(UART_SERVICE);
+      writeCharacteristic = await service.getCharacteristic(UART_RX);
+
+      isBluetoothConnected = true;
+      setBtStatus(true);
+      log("Berhasil terhubung ke micro:bit 🎉");
+    } catch (err) {
+      log("Gagal koneksi: " + err.message);
+      console.error(err);
+      setBtStatus(false);
+    }
+  }
+
+  function onDisconnected() {
+    isBluetoothConnected = false;
+    writeCharacteristic = null;
+    resetDetection();
+    setBtStatus(false);
+    setLastCommand("-");
+    setGateStatus("Siaga");
+    log("Koneksi Bluetooth terputus");
+  }
+
+  function disconnectBluetooth() {
+    if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+      bluetoothDevice.gatt.disconnect();
+      onDisconnected();
+    } else {
+      log("Belum ada micro:bit yang terhubung.");
+    }
+  }
+
+  async function sendCommand(label) {
+    if (!isBluetoothConnected || !writeCharacteristic) {
+      return false;
+    }
+
+    try {
+      const data = new TextEncoder().encode(label + "\n");
+      await writeCharacteristic.writeValue(data);
+
+      setLastCommand(label);
+      setIconPreview(label);
+      setGateStatus(label === LABEL_OKE ? "Ikon ✓ dikirim!" : "Ikon ✌ dikirim!");
+      log("Perintah <b>" + label.toUpperCase() + "</b> dikirim ke micro:bit");
+      return true;
+    } catch (err) {
+      log("Gagal kirim Bluetooth: " + err.message);
+      console.error(err);
+      return false;
+    }
+  }
+
+  // ==================== TEACHABLE MACHINE ====================
+  async function loadModel() {
+    log("Memuat model AI Teachable Machine...");
+    const modelURL = MODEL_URL + "model.json";
+    const metadataURL = MODEL_URL + "metadata.json";
+
+    try {
+      model = await tmImage.load(modelURL, metadataURL);
+      maxPredictions = model.getTotalClasses();
+      log("Model berhasil dimuat! Siap digunakan.");
+    } catch (err) {
+      log("Gagal memuat model: " + err.message);
+      console.error(err);
+    }
+  }
+
+  async function startCamera() {
+    if (isPredicting) return;
+    if (!model) await loadModel();
+
+    log("Meminta izin akses kamera...");
+    const container = document.getElementById("webcam-container");
+    const placeholder = document.getElementById("cam-placeholder");
+    if(placeholder) placeholder.style.display = "none";
+
+    // Bersihkan video sebelumnya jika ada
+    const oldVideo = container.querySelector("video");
+    if(oldVideo) oldVideo.remove();
+
+    videoEl = document.createElement("video");
+    videoEl.setAttribute("autoplay", "");
+    videoEl.setAttribute("playsinline", ""); // Penting untuk mobile/iOS
+    container.appendChild(videoEl);
+
+    try {
+      mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+      videoEl.srcObject = mediaStream;
+      await videoEl.play();
+
+      isPredicting = true;
+      setCamStatus(true);
+      log("Kamera aktif! Arahkan gestur ke layar.");
+      window.requestAnimationFrame(loop);
+    } catch (err) {
+      log("Gagal membuka kamera. Pastikan izin telah diberikan.");
+      console.error(err);
+      if(placeholder) {
+          placeholder.style.display = "block";
+          placeholder.innerHTML = '❌ Akses kamera ditolak atau tidak ditemukan.';
+      }
+    }
+  }
+
+  function stopCamera() {
+    isPredicting = false;
+    if (mediaStream) {
+      mediaStream.getTracks().forEach(track => track.stop());
+      mediaStream = null;
+    }
+    
+    const container = document.getElementById("webcam-container");
+    const video = container.querySelector("video");
+    if (video) video.remove();
+    
+    const placeholder = document.getElementById("cam-placeholder");
+    if (placeholder) {
+        placeholder.style.display = "block";
+        placeholder.innerHTML = '📷 Kamera mati.<br>Tekan tombol <b>Mulai Kamera</b> di atas!';
+    }
+    
+    setCamStatus(false);
+    resetDetection();
+    updateBars([]);
+    document.getElementById("prediction-label").textContent = "Belum ada gestur";
+    document.getElementById("prediction-confidence").textContent = "";
+    log("Kamera dihentikan.");
+  }
+
+  async function loop() {
+    if (!isPredicting) return;
+    await predict();
+    window.requestAnimationFrame(loop);
+  }
+
+  async function predict() {
+    if (!videoEl || videoEl.readyState !== 4) return;
+
+    const prediction = await model.predict(videoEl);
+    updateBars(prediction);
+
+    let bestLabel = null;
+    let bestScore = 0;
+
+    // Cari prediksi tertinggi yang termasuk dalam daftar ALLOWED_LABELS
+    for (let i = 0; i < maxPredictions; i++) {
+      const className = (prediction[i].className || "").toLowerCase();
+      const prob = prediction[i].probability;
+      
+      if (ALLOWED_LABELS.includes(className) && prob > bestScore) {
+        bestScore = prob;
+        bestLabel = className;
+      }
+    }
+
+    const now = Date.now();
+    const lblEl = document.getElementById("prediction-label");
+    const confEl = document.getElementById("prediction-confidence");
+
+    if (bestLabel && bestScore > PRESENCE_THRESHOLD) {
+      lblEl.textContent = bestLabel.toUpperCase();
+      confEl.textContent = (bestScore * 100).toFixed(0) + "%";
+    } else {
+      lblEl.textContent = "Mencari gestur...";
+      confEl.textContent = "";
+    }
+
+    // Logika Stabilisasi dan Cooldown
+    if (bestLabel && bestScore >= CONFIDENCE_THRESHOLD) {
+      setGestureStatus(bestLabel);
+      updateTabs(bestLabel, true);
+      lastPresenceTime = now;
+
+      if (candidateLabel !== bestLabel) {
+        // Gestur baru terdeteksi
+        candidateLabel = bestLabel;
+        candidateSince = now;
+        locked = false;
+        setGateStatus("Mendeteksi " + bestLabel.toUpperCase() + "...");
+      } else {
+        // Jika sudah stabil dan cooldown selesai
+        if (!locked && !isSending && (now - lastSendTime > COOLDOWN_MS)) {
+          if (now - candidateSince >= STABLE_MS) {
+            locked = true;
+            isSending = true;
+            setGateStatus("Memproses...");
+            
+            await sendCommand(bestLabel);
+            
+            lastSendTime = now;
+            isSending = false;
+          }
+        } else if (locked) {
+          setGateStatus("Cooldown aktif...");
+        }
+      }
+    } else {
+      updateTabs(null, false);
+      // Hilangkan status jika gestur hilang terlalu lama
+      if (now - lastPresenceTime > CLEAR_MS) {
+        setGestureStatus(null);
+        candidateLabel = null;
+        candidateSince = 0;
+        locked = false;
+        setGateStatus("Siaga");
+      }
+    }
+  }
+
+  // ==================== EVENT LISTENER ====================
+  document.getElementById("btn-connect").addEventListener("click", connectBluetooth);
+  document.getElementById("btn-connect-nav").addEventListener("click", connectBluetooth);
+  document.getElementById("btn-disconnect").addEventListener("click", disconnectBluetooth);
+  document.getElementById("btn-start").addEventListener("click", startCamera);
+  document.getElementById("btn-stop").addEventListener("click", stopCamera);
+
+  // Pesan selamat datang
+  log("Sistem Gesture Patrol siap. Hubungkan micro:bit dan nyalakan kamera!");
+
+})();
+</script>
+</body>
+</html>
